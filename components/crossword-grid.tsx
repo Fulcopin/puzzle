@@ -410,7 +410,7 @@ function CrosswordGame() {
             {Array.from({ length: R }).map((_, r) =>
               Array.from({ length: C }).map((_, c) => {
                 const cell = SOLUTION[r][c]
-                if (cell.isBlack) return <div key={`${r}-${c}`} className="h-9 w-9 bg-foreground/8 md:h-11 md:w-11" />
+                if (cell.isBlack) return <div key={`${r}-${c}`} className="h-9 w-9 bg-card md:h-11 md:w-11" />
 
                 const key = `${r}-${c}`
                 const hl = highlighted.has(key)
