@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useRef, useState, useMemo } from "react"
+import { useCallback, useRef, useState, useMemo, useEffect } from "react"
+import confetti from "canvas-confetti"
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -23,7 +24,7 @@ interface CellData {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CROSSWORD SOLVER – greedy placement with verified intersections    */
+/*  CROSSWORD SOLVER                                                   */
 /* ------------------------------------------------------------------ */
 function solveCrossword(
   wordList: { word: string; clue: string }[]
@@ -35,14 +36,11 @@ function solveCrossword(
 
   const sorted = [...wordList].sort((a, b) => b.word.length - a.word.length)
 
-  // Place the first word across in the center
-  const first = sorted[0]
   const sr = Math.floor(MAX / 2)
-  const sc = Math.floor((MAX - first.word.length) / 2)
-  for (let i = 0; i < first.word.length; i++) grid[sr][sc + i] = first.word[i]
-  placed.push({ ...first, direction: "across", row: sr, col: sc, number: numCounter++ })
+  const sc = Math.floor((MAX - sorted[0].word.length) / 2)
+  for (let i = 0; i < sorted[0].word.length; i++) grid[sr][sc + i] = sorted[0].word[i]
+  placed.push({ ...sorted[0], direction: "across", row: sr, col: sc, number: numCounter++ })
 
-  // Place remaining words
   for (let wi = 1; wi < sorted.length; wi++) {
     const w = sorted[wi]
     let best: PlacedWord | null = null
@@ -53,15 +51,11 @@ function solveCrossword(
       for (let r = 0; r < MAX; r++) {
         for (let c = 0; c < MAX; c++) {
           if (grid[r][c] !== ch) continue
-
-          // Try DOWN
           const dr = r - li
           if (dr >= 0 && dr + w.word.length <= MAX && canPlace(grid, w.word, "down", dr, c, MAX)) {
             const s = crossings(grid, w.word, "down", dr, c, MAX)
             if (s > bestScore) { bestScore = s; best = { ...w, direction: "down", row: dr, col: c, number: numCounter } }
           }
-
-          // Try ACROSS
           const ac = c - li
           if (ac >= 0 && ac + w.word.length <= MAX && canPlace(grid, w.word, "across", r, ac, MAX)) {
             const s = crossings(grid, w.word, "across", r, ac, MAX)
@@ -82,13 +76,11 @@ function solveCrossword(
     }
   }
 
-  // Bounding box
   let minR = MAX, maxR = 0, minC = MAX, maxC = 0
   for (let r = 0; r < MAX; r++)
     for (let c = 0; c < MAX; c++)
       if (grid[r][c] !== null) { minR = Math.min(minR, r); maxR = Math.max(maxR, r); minC = Math.min(minC, c); maxC = Math.max(maxC, c) }
 
-  // Normalize + renumber in reading order
   const norm = placed.map(p => ({ ...p, row: p.row - minR, col: p.col - minC }))
   const starts = [...new Set(norm.map(p => `${p.row}-${p.col}`))].map(k => {
     const [r, c] = k.split("-").map(Number)
@@ -114,7 +106,6 @@ function canPlace(g: (string | null)[][], w: string, dir: "across" | "down", sr:
       if (ex !== w[i]) return false
       crosses++
     } else {
-      // No parallel adjacency
       if (dir === "across") {
         if (r > 0 && g[r - 1][c] !== null) return false
         if (r < max - 1 && g[r + 1][c] !== null) return false
@@ -125,7 +116,6 @@ function canPlace(g: (string | null)[][], w: string, dir: "across" | "down", sr:
     }
   }
   if (crosses === 0 || crosses === w.length) return false
-  // No letter directly before/after
   if (dir === "across") {
     if (sc > 0 && g[sr][sc - 1] !== null) return false
     if (sc + w.length < max && g[sr][sc + w.length] !== null) return false
@@ -147,7 +137,7 @@ function crossings(g: (string | null)[][], w: string, dir: "across" | "down", sr
 }
 
 /* ------------------------------------------------------------------ */
-/*  WORD LIST — Topic 3: Learning Environments                        */
+/*  WORD LIST                                                          */
 /* ------------------------------------------------------------------ */
 const WORD_LIST = [
   { word: "PERSONALIZATION", clue: "Tailoring the learning experience to individual goals and prior knowledge." },
@@ -168,7 +158,7 @@ const WORD_LIST = [
 ]
 
 /* ------------------------------------------------------------------ */
-/*  COMPUTED LAYOUT (runs once at module level)                        */
+/*  COMPUTED LAYOUT                                                    */
 /* ------------------------------------------------------------------ */
 const LAYOUT = solveCrossword(WORD_LIST)
 
@@ -219,7 +209,19 @@ function CrosswordGame() {
   const [selectedClue, setSelectedClue] = useState<number | null>(null)
   const [score, setScore] = useState<{ correct: number; total: number } | null>(null)
   const [isComplete, setIsComplete] = useState(false)
+  const [filledCount, setFilledCount] = useState(0)
+  const [showHint, setShowHint] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[][]>(Array.from({ length: R }, () => Array(C).fill(null)))
+  const clueRefs = useRef<(HTMLButtonElement | null)[]>(Array(LAYOUT.placements.length).fill(null))
+
+  // Track filled cells for progress
+  useEffect(() => {
+    let count = 0
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++)
+        if (!SOLUTION[r][c].isBlack && userInput[r][c]) count++
+    setFilledCount(count)
+  }, [userInput, R, C])
 
   const handleInput = useCallback((row: number, col: number, value: string) => {
     const char = value.toUpperCase().replace(/[^A-Z]/g, "").slice(-1)
@@ -263,7 +265,12 @@ function CrosswordGame() {
         }
     setValidation(nv)
     setScore({ correct, total: TOTAL_CELLS })
-    setIsComplete(correct === TOTAL_CELLS)
+    if (correct === TOTAL_CELLS) {
+      setIsComplete(true)
+      confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } })
+      setTimeout(() => confetti({ particleCount: 100, spread: 60, origin: { x: 0.2, y: 0.5 } }), 400)
+      setTimeout(() => confetti({ particleCount: 100, spread: 60, origin: { x: 0.8, y: 0.5 } }), 800)
+    }
   }, [userInput, R, C])
 
   const reset = useCallback(() => {
@@ -279,6 +286,21 @@ function CrosswordGame() {
     setValidation(Array.from({ length: R }, () => Array(C).fill(null)))
     setScore(null)
   }, [R, C])
+
+  const revealWord = useCallback(() => {
+    if (selectedClue === null) return
+    const wp = LAYOUT.placements[selectedClue]
+    setUserInput(prev => {
+      const n = prev.map(r => [...r])
+      for (let i = 0; i < wp.word.length; i++) {
+        const r = wp.direction === "down" ? wp.row + i : wp.row
+        const c = wp.direction === "across" ? wp.col + i : wp.col
+        n[r][c] = wp.word[i]
+      }
+      return n
+    })
+    setShowHint(false)
+  }, [selectedClue])
 
   const highlighted = useMemo(() => {
     if (selectedClue === null) return new Set<string>()
@@ -299,67 +321,109 @@ function CrosswordGame() {
     LAYOUT.placements.map((w, i) => ({ ...w, idx: i })).filter(w => w.direction === "down").sort((a, b) => a.number - b.number),
   [])
 
+  const progressPercent = Math.round((filledCount / TOTAL_CELLS) * 100)
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-primary md:text-3xl text-balance text-center font-sans">
-          Crossword Puzzle - Topic 3: Learning Environments
-        </h1>
-        <p className="text-sm text-muted-foreground text-center text-pretty">
-          Complete the crossword with key concepts about learning environments
-        </p>
+    <div className="flex flex-col gap-8">
+      {/* Progress Bar */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium text-foreground">Progress</span>
+          <span className="font-semibold text-primary">{filledCount}/{TOTAL_CELLS} cells filled ({progressPercent}%)</span>
+        </div>
+        <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <button onClick={verify} className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
-          Verify
+      <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <button
+          onClick={verify}
+          className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md active:scale-95"
+        >
+          Verify Answers
         </button>
-        <button onClick={revealAll} className="rounded-lg bg-secondary px-5 py-2.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80">
+        <button
+          onClick={() => setShowHint(!showHint)}
+          disabled={selectedClue === null}
+          className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-all hover:bg-accent/90 hover:shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Reveal Word
+        </button>
+        <button
+          onClick={revealAll}
+          className="rounded-lg bg-secondary px-5 py-2.5 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80 active:scale-95"
+        >
           Reveal All
         </button>
-        <button onClick={reset} className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+        <button
+          onClick={reset}
+          className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-95"
+        >
           Reset
         </button>
-        {score && (
-          <span className="rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground">
-            {score.correct}/{score.total} correct letters
-          </span>
+        {score && !isComplete && (
+          <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-sm font-semibold text-foreground">
+              {score.correct}/{score.total} correct
+            </span>
+          </div>
         )}
       </div>
 
+      {/* Hint confirmation */}
+      {showHint && selectedClue !== null && (
+        <div className="flex items-center justify-center gap-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
+          <p className="text-sm text-foreground">
+            Reveal <strong>{LAYOUT.placements[selectedClue].number} {LAYOUT.placements[selectedClue].direction}</strong>?
+          </p>
+          <button onClick={revealWord} className="rounded-md bg-accent px-4 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent/90">
+            Yes, reveal
+          </button>
+          <button onClick={() => setShowHint(false)} className="rounded-md border border-border px-4 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Success banner */}
       {isComplete && (
-        <div className="rounded-lg bg-accent/10 border border-accent/30 p-4 text-center">
-          <p className="text-lg font-bold text-foreground">Crossword completed correctly!</p>
+        <div className="rounded-xl bg-accent/10 border-2 border-accent/30 p-6 text-center shadow-sm">
+          <p className="text-2xl font-bold text-foreground">Congratulations!</p>
+          <p className="text-sm text-muted-foreground mt-1">You completed the crossword perfectly!</p>
         </div>
       )}
 
       {/* Grid + Clues */}
       <div className="flex flex-col items-start gap-8 lg:flex-row">
         {/* Grid */}
-        <div className="w-full overflow-x-auto lg:w-auto">
+        <div className="w-full overflow-x-auto rounded-xl border border-border bg-card p-3 shadow-sm lg:w-auto lg:p-4">
           <div
-            className="mx-auto inline-grid gap-0 border border-foreground/20 rounded-md"
+            className="mx-auto inline-grid gap-0 rounded-lg overflow-hidden border border-foreground/20"
             style={{ gridTemplateColumns: `repeat(${C}, minmax(0, 1fr))` }}
           >
             {Array.from({ length: R }).map((_, r) =>
               Array.from({ length: C }).map((_, c) => {
                 const cell = SOLUTION[r][c]
-                if (cell.isBlack) return <div key={`${r}-${c}`} className="h-8 w-8 bg-foreground/10 md:h-10 md:w-10" />
+                if (cell.isBlack) return <div key={`${r}-${c}`} className="h-9 w-9 bg-foreground/8 md:h-11 md:w-11" />
 
                 const key = `${r}-${c}`
                 const hl = highlighted.has(key)
                 const v = validation[r][c]
                 let bg = "bg-card"
-                if (v === "correct") bg = "bg-accent/20"
-                else if (v === "incorrect") bg = "bg-destructive/15"
+                if (v === "correct") bg = "bg-emerald-100"
+                else if (v === "incorrect") bg = "bg-red-100"
                 else if (hl) bg = "bg-primary/10"
 
                 return (
-                  <div key={key} className={`relative h-8 w-8 border border-foreground/15 md:h-10 md:w-10 ${bg}`}>
+                  <div key={key} className={`relative h-9 w-9 border border-foreground/12 transition-colors duration-200 md:h-11 md:w-11 ${bg}`}>
                     {cell.number && (
-                      <span className="absolute left-0.5 top-0 text-[8px] font-bold text-primary leading-none md:text-[10px]">
+                      <span className="absolute left-0.5 top-0 text-[9px] font-bold text-primary leading-none md:text-[11px] select-none">
                         {cell.number}
                       </span>
                     )}
@@ -369,11 +433,16 @@ function CrosswordGame() {
                       maxLength={1}
                       value={userInput[r][c]}
                       aria-label={`Cell row ${r + 1} column ${c + 1}`}
-                      className="absolute inset-0 h-full w-full bg-transparent text-center text-sm font-bold text-foreground outline-none caret-primary focus:ring-2 focus:ring-primary/50 focus:ring-inset md:text-base uppercase"
+                      className="absolute inset-0 h-full w-full bg-transparent text-center text-sm font-bold text-foreground outline-none caret-primary focus:ring-2 focus:ring-primary/40 focus:ring-inset focus:bg-primary/5 md:text-base uppercase transition-all"
                       onChange={e => handleInput(r, c, e.target.value)}
                       onKeyDown={e => handleKeyDown(r, c, e)}
                       onFocus={() => {
                         const ai = cell.acrossIdx, di = cell.downIdx
+                        if (selectedClue !== null) {
+                          const cur = LAYOUT.placements[selectedClue]
+                          if (cur.direction === "across" && ai !== null && ai === selectedClue) return
+                          if (cur.direction === "down" && di !== null && di === selectedClue) return
+                        }
                         if (ai !== null) setSelectedClue(ai)
                         else if (di !== null) setSelectedClue(di)
                       }}
@@ -386,38 +455,59 @@ function CrosswordGame() {
         </div>
 
         {/* Clues */}
-        <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2 lg:w-[420px] lg:grid-cols-1 shrink-0">
-          <div>
-            <h2 className="mb-3 text-lg font-bold text-primary">Across</h2>
-            <ol className="flex flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-6 lg:w-[420px] shrink-0">
+          {/* Across */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-foreground">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+                {"→"}
+              </span>
+              Across
+            </h2>
+            <ol className="flex flex-col gap-1">
               {acrossClues.map(w => (
                 <li key={w.number}>
                   <button
+                    ref={el => { clueRefs.current[w.idx] = el }}
                     onClick={() => { setSelectedClue(w.idx); inputRefs.current[w.row]?.[w.col]?.focus() }}
-                    className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                      selectedClue === w.idx ? "bg-primary/10 text-foreground font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm leading-relaxed transition-all ${
+                      selectedClue === w.idx
+                        ? "bg-primary/10 text-foreground font-medium shadow-sm ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
-                    <span className="font-bold text-primary mr-2">{w.number}.</span>
-                    {w.clue} <span className="text-xs text-muted-foreground">({w.word.length})</span>
+                    <span className="font-bold text-primary mr-1.5">{w.number}.</span>
+                    {w.clue}
+                    <span className="ml-1 text-xs text-muted-foreground">({w.word.length})</span>
                   </button>
                 </li>
               ))}
             </ol>
           </div>
-          <div>
-            <h2 className="mb-3 text-lg font-bold text-primary">Down</h2>
-            <ol className="flex flex-col gap-1.5">
+
+          {/* Down */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-foreground">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+                {"↓"}
+              </span>
+              Down
+            </h2>
+            <ol className="flex flex-col gap-1">
               {downClues.map(w => (
                 <li key={w.number}>
                   <button
+                    ref={el => { clueRefs.current[w.idx] = el }}
                     onClick={() => { setSelectedClue(w.idx); inputRefs.current[w.row]?.[w.col]?.focus() }}
-                    className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                      selectedClue === w.idx ? "bg-primary/10 text-foreground font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm leading-relaxed transition-all ${
+                      selectedClue === w.idx
+                        ? "bg-primary/10 text-foreground font-medium shadow-sm ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
-                    <span className="font-bold text-primary mr-2">{w.number}.</span>
-                    {w.clue} <span className="text-xs text-muted-foreground">({w.word.length})</span>
+                    <span className="font-bold text-primary mr-1.5">{w.number}.</span>
+                    {w.clue}
+                    <span className="ml-1 text-xs text-muted-foreground">({w.word.length})</span>
                   </button>
                 </li>
               ))}
