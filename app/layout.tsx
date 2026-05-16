@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Crucigrama - Tema 3: Entornos de Aprendizaje',
-  description: 'Crucigrama interactivo sobre entornos de aprendizaje del Tema 3',
+  title: 'Crossword Puzzle - Topic 3: Learning Environments',
+  description: 'Interactive crossword puzzle about learning environments from Topic 3',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="bg-background">
+    <html lang="en" className="bg-background">
       <body className="font-sans antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
