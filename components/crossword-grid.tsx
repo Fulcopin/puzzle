@@ -326,51 +326,52 @@ function CrosswordGame() {
   return (
     <div className="flex flex-col gap-8">
       {/* Progress Bar */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3 p-4 rounded-2xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-white/20 shadow-sm">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-foreground">Progress</span>
-          <span className="font-semibold text-primary">{filledCount}/{TOTAL_CELLS} cells filled ({progressPercent}%)</span>
+          <span className="font-semibold text-foreground/80 tracking-tight">PROGRESS</span>
+          <span className="font-bold text-primary tabular-nums">{filledCount} / {TOTAL_CELLS} ({progressPercent}%)</span>
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800 shadow-inner p-1">
           <div
-            className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-primary/80 to-primary transition-all duration-700 ease-out shadow-lg"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-white/20 bg-white/60 dark:bg-slate-900/60 p-5 shadow-xl backdrop-blur-xl">
         <button
           onClick={verify}
-          className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md active:scale-95"
+          className="group relative overflow-hidden rounded-xl bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg transition-all hover:scale-105 active:scale-95"
         >
-          Verify Answers
+          <span className="relative z-10">Verify Answers</span>
+          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
         </button>
         <button
           onClick={() => setShowHint(!showHint)}
           disabled={selectedClue === null}
-          className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-all hover:bg-accent/90 hover:shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-xl bg-secondary/80 px-6 py-3 text-sm font-bold text-secondary-foreground shadow-md transition-all hover:bg-secondary active:scale-95 disabled:opacity-40"
         >
           Reveal Word
         </button>
         <button
           onClick={revealAll}
-          className="rounded-lg bg-secondary px-5 py-2.5 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80 active:scale-95"
+          className="rounded-xl bg-slate-200 dark:bg-slate-800 px-6 py-3 text-sm font-bold text-foreground transition-all hover:bg-slate-300 dark:hover:bg-slate-700 active:scale-95"
         >
           Reveal All
         </button>
         <button
           onClick={reset}
-          className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-95"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-foreground/70 transition-all hover:bg-white/40 active:scale-95"
         >
           Reset
         </button>
         {score && !isComplete && (
-          <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
-            <span className="text-sm font-semibold text-foreground">
-              {score.correct}/{score.total} correct
+          <div className="flex items-center gap-3 rounded-xl bg-primary/10 px-5 py-3 border border-primary/20">
+            <div className="h-3 w-3 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+            <span className="text-sm font-bold text-primary tabular-nums">
+              {score.correct} / {score.total} CORRECT
             </span>
           </div>
         )}
@@ -402,28 +403,40 @@ function CrosswordGame() {
       {/* Grid + Clues */}
       <div className="flex flex-col items-start gap-8 lg:flex-row">
         {/* Grid */}
-        <div className="w-full overflow-x-auto rounded-xl border border-border bg-card p-3 shadow-sm lg:w-auto lg:p-4">
+        <div className="w-full overflow-x-auto rounded-xl border border-border bg-card/50 p-4 shadow-xl backdrop-blur-sm lg:w-auto">
           <div
-            className="mx-auto inline-grid gap-0 rounded-lg overflow-hidden border border-foreground/20"
-            style={{ gridTemplateColumns: `repeat(${C}, minmax(0, 1fr))` }}
+            className="mx-auto inline-grid bg-slate-200 dark:bg-slate-700 gap-[1px] border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden shadow-2xl"
+            style={{ 
+              gridTemplateColumns: `repeat(${C}, 40px)`,
+              gridAutoRows: '40px'
+            }}
           >
             {Array.from({ length: R }).map((_, r) =>
               Array.from({ length: C }).map((_, c) => {
                 const cell = SOLUTION[r][c]
-                if (cell.isBlack) return <div key={`${r}-${c}`} className="h-9 w-9 bg-card md:h-11 md:w-11" />
-
                 const key = `${r}-${c}`
                 const hl = highlighted.has(key)
                 const v = validation[r][c]
-                let bg = "bg-card"
-                if (v === "correct") bg = "bg-emerald-100"
-                else if (v === "incorrect") bg = "bg-red-100"
+                
+                if (cell.isBlack) return (
+                  <div 
+                    key={key} 
+                    className="w-10 h-10 bg-slate-50/50 dark:bg-slate-900/50" 
+                  />
+                )
+
+                let bg = "bg-white dark:bg-slate-950"
+                if (v === "correct") bg = "bg-emerald-500/20"
+                else if (v === "incorrect") bg = "bg-rose-500/20"
                 else if (hl) bg = "bg-primary/10"
 
                 return (
-                  <div key={key} className={`relative h-9 w-9 border border-foreground/12 transition-colors duration-200 md:h-11 md:w-11 ${bg}`}>
+                  <div 
+                    key={key} 
+                    className={`relative w-10 h-10 transition-all duration-200 group ${bg} hover:z-10`}
+                  >
                     {cell.number && (
-                      <span className="absolute left-0.5 top-0 text-[9px] font-bold text-primary leading-none md:text-[11px] select-none">
+                      <span className="absolute left-1 top-0.5 text-[10px] font-bold text-primary/70 leading-none select-none z-10">
                         {cell.number}
                       </span>
                     )}
@@ -432,8 +445,7 @@ function CrosswordGame() {
                       type="text"
                       maxLength={1}
                       value={userInput[r][c]}
-                      aria-label={`Cell row ${r + 1} column ${c + 1}`}
-                      className="absolute inset-0 h-full w-full bg-transparent text-center text-sm font-bold text-foreground outline-none caret-primary focus:ring-2 focus:ring-primary/40 focus:ring-inset focus:bg-primary/5 md:text-base uppercase transition-all"
+                      className="absolute inset-0 w-full h-full bg-transparent text-center text-xl font-bold text-foreground outline-none caret-primary focus:bg-primary/5 uppercase transition-all"
                       onChange={e => handleInput(r, c, e.target.value)}
                       onKeyDown={e => handleKeyDown(r, c, e)}
                       onFocus={() => {
@@ -447,6 +459,8 @@ function CrosswordGame() {
                         else if (di !== null) setSelectedClue(di)
                       }}
                     />
+                    {/* Focus indicator ring */}
+                    <div className="absolute inset-0 pointer-events-none border-2 border-transparent group-focus-within:border-primary/50 z-30 transition-all" />
                   </div>
                 )
               })
