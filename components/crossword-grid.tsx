@@ -223,6 +223,50 @@ function CrosswordGame() {
     setFilledCount(count)
   }, [userInput, R, C])
 
+  // Real-time validation when a word is completed
+  useEffect(() => {
+    if (selectedClue === null) return
+
+    const wp = LAYOUT.placements[selectedClue]
+    let allFilled = true
+    const wordCells: { r: number; c: number }[] = []
+    
+    for (let i = 0; i < wp.word.length; i++) {
+      const r = wp.direction === "down" ? wp.row + i : wp.row
+      const c = wp.direction === "across" ? wp.col + i : wp.col
+      wordCells.push({ r, c })
+      if (!userInput[r][c]) {
+        allFilled = false
+      }
+    }
+
+    if (allFilled) {
+      let wordIsCorrect = true
+      const newValidation = validation.map(row => [...row])
+      const newUserInput = userInput.map(row => [...row])
+      let hasIncorrect = false
+
+      for (const { r, c } of wordCells) {
+        if (userInput[r][c] === SOLUTION[r][c].letter) {
+          newValidation[r][c] = "correct"
+        } else {
+          wordIsCorrect = false
+          newValidation[r][c] = "incorrect"
+          newUserInput[r][c] = "" // Clear the incorrect letter!
+          hasIncorrect = true
+        }
+      }
+
+      if (hasIncorrect) {
+        setValidation(newValidation)
+        setUserInput(newUserInput)
+      } else if (wordIsCorrect) {
+        setValidation(newValidation)
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } })
+      }
+    }
+  }, [userInput, selectedClue])
+
   const handleInput = useCallback((row: number, col: number, value: string) => {
     const char = value.toUpperCase().replace(/[^A-Z]/g, "").slice(-1)
     setUserInput(prev => { const n = prev.map(r => [...r]); n[row][col] = char; return n })
@@ -257,13 +301,18 @@ function CrosswordGame() {
   const verify = useCallback(() => {
     let correct = 0
     const nv: (null | "correct" | "incorrect")[][] = Array.from({ length: R }, () => Array(C).fill(null))
+    const newUserInput = userInput.map(row => [...row])
     for (let r = 0; r < R; r++)
       for (let c = 0; c < C; c++)
         if (!SOLUTION[r][c].isBlack) {
           if (userInput[r][c] === SOLUTION[r][c].letter) { nv[r][c] = "correct"; correct++ }
-          else if (userInput[r][c]) nv[r][c] = "incorrect"
+          else if (userInput[r][c]) {
+            nv[r][c] = "incorrect"
+            newUserInput[r][c] = "" // Clear/Delete the incorrect letter!
+          }
         }
     setValidation(nv)
+    setUserInput(newUserInput)
     setScore({ correct, total: TOTAL_CELLS })
     if (correct === TOTAL_CELLS) {
       setIsComplete(true)
@@ -425,18 +474,26 @@ function CrosswordGame() {
                   />
                 )
 
-                let bg = "bg-white dark:bg-slate-950"
-                if (v === "correct") bg = "bg-emerald-500/20"
-                else if (v === "incorrect") bg = "bg-rose-500/20"
-                else if (hl) bg = "bg-primary/10"
+                let bgState = "bg-white dark:bg-slate-900 text-foreground"
+                if (v === "correct") {
+                  bgState = "bg-emerald-500 dark:bg-emerald-600 text-white"
+                } else if (v === "incorrect") {
+                  bgState = "bg-red-500 dark:bg-red-600 text-white"
+                } else if (hl) {
+                  bgState = "bg-sky-100 dark:bg-sky-950/40 text-foreground"
+                }
 
                 return (
                   <div 
                     key={key} 
-                    className={`relative w-10 h-10 transition-all duration-200 group ${bg} hover:z-10`}
+                    className={`relative w-10 h-10 transition-all duration-200 group ${bgState} hover:z-10`}
                   >
                     {cell.number && (
-                      <span className="absolute left-1 top-0.5 text-[10px] font-bold text-primary/70 leading-none select-none z-10">
+                      <span className={`absolute left-1 top-0.5 text-[10px] font-bold leading-none select-none z-10 ${
+                        v === "correct" || v === "incorrect" 
+                          ? "text-white/80" 
+                          : "text-primary/70"
+                      }`}>
                         {cell.number}
                       </span>
                     )}
@@ -445,7 +502,11 @@ function CrosswordGame() {
                       type="text"
                       maxLength={1}
                       value={userInput[r][c]}
-                      className="absolute inset-0 w-full h-full bg-transparent text-center text-xl font-bold text-foreground outline-none caret-primary focus:bg-primary/5 uppercase transition-all"
+                      className={`absolute inset-0 w-full h-full bg-transparent text-center text-xl font-bold outline-none caret-current uppercase transition-all ${
+                        v === "correct" || v === "incorrect" 
+                          ? "text-white" 
+                          : "text-foreground focus:bg-primary/5"
+                      }`}
                       onChange={e => handleInput(r, c, e.target.value)}
                       onKeyDown={e => handleKeyDown(r, c, e)}
                       onFocus={() => {
